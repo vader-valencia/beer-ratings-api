@@ -3,4 +3,4 @@ API for comms with simple back-end for beer ratings
 
 
 ## To start the API
-uvicorn main:app --reload
+python -m uvicorn main:app --reload
