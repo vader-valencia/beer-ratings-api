@@ -1,9 +1,14 @@
 from cv2 import cornerEigenValsAndVecs
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, Response, UploadFile
 from matplotlib.pyplot import ginput
 from pydantic import BaseModel
 from enum import Enum
 import pandas as pd
+import qrcode
+import socket
+from PIL import Image
+import io
+
 
 app = FastAPI()
 
@@ -66,6 +71,51 @@ def checkRatingValidInputType(rating):
     if type(rating) != int:
         raise FastAPI.HTTPException(status_code=409, detail=f'Non-numeric rating entered for item')
 
+def get_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.settimeout(0)
+    try:
+        # doesn't even have to be reachable
+        s.connect(('10.254.254.254', 1))
+        IP = s.getsockname()[0]
+    except Exception:
+        IP = '127.0.0.1'
+    finally:
+        s.close()
+    return IP
+
+def image_to_byte_array(image: Image) -> bytes:
+  # BytesIO is a fake file stored in memory
+  imgByteArr = io.BytesIO()
+  # image.save expects a file as a argument, passing a bytes io ins
+  image.save(imgByteArr, format=image.format)
+  # Turn the BytesIO object back into a bytes object
+  imgByteArr = imgByteArr.getvalue()
+  return imgByteArr
+
+@app.get('/{port}/{webPath}/qr-code',     
+    responses = {
+        200: {
+            "content": {"image/png": {}}
+        }
+    },
+     response_class=Response)
+async def getQrCode(port, webPath, fillColor='black', backgroundColor='white'):
+    address = 'http://'+get_ip()+':'+port+'/'+webPath
+    # Creating an instance of QRCode class
+    qr = qrcode.QRCode(version = 1,
+                    box_size = 10,
+                    border = 5)
+    
+    # Adding data to the instance 'qr'
+    qr.add_data(address)
+    
+    qr.make(fit = True)
+    img = qr.make_image(fill_color = fillColor,
+                        back_color = backgroundColor)
+    
+    return Response(content=image_to_byte_array(img), media_type="image/png")
+
 @app.get('/all-items', response_model=ItemsResponse)
 async def getAllItems():
     return items_df
@@ -73,7 +123,6 @@ async def getAllItems():
 @app.get('/item/{item_id}', response_model=ItemResponse)
 async def getItemById(itemId):
     checkitemExists(itemId)
-
     return items_df.loc[itemId]
 
 @app.post('/new-item/', response_model=SuccessMessage)
