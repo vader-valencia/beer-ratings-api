@@ -8,9 +8,25 @@ import qrcode
 import socket
 from PIL import Image
 import io
+from fastapi.middleware.cors import CORSMiddleware
+
 
 
 app = FastAPI()
+
+origins = [
+    "http://localhost",
+    "http://localhost:8000",
+    "http://localhost:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class AlcoholType(Enum):
     Beer = 1
@@ -93,14 +109,14 @@ def image_to_byte_array(image: Image) -> bytes:
   imgByteArr = imgByteArr.getvalue()
   return imgByteArr
 
-@app.get('/{port}/{webPath}/qr-code',     
+@app.get('/{port}/qr-code',     
     responses = {
         200: {
             "content": {"image/png": {}}
         }
     },
      response_class=Response)
-async def getQrCode(port, webPath, fillColor='black', backgroundColor='white'):
+async def getQrCode(port, webPath='', fillColor='black', backgroundColor='white'):
     address = 'http://'+get_ip()+':'+port+'/'+webPath
     # Creating an instance of QRCode class
     qr = qrcode.QRCode(version = 1,
@@ -115,6 +131,7 @@ async def getQrCode(port, webPath, fillColor='black', backgroundColor='white'):
                         back_color = backgroundColor)
     
     return Response(content=image_to_byte_array(img), media_type="image/png")
+
 
 @app.get('/all-items', response_model=ItemsResponse)
 async def getAllItems():
