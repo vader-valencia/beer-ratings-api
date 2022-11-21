@@ -175,10 +175,6 @@ async def createNewCategory(category: Category):
 
 @app.post("/rating/{itemId}", response_model=SuccessMessage)
 async def createNewRating(itemId: int, rating: Rating):
-    # Check for invalid data entries
-    # if itemId not in [item.id for item in items]:
-    #    raise HTTPException(status_code=404, detail=f"Invalid itemId")
-
     for item in items:
         if item.id == itemId:
             newAverage = (item.numRatings * item.rating + rating.rating) / (
