@@ -30,101 +30,57 @@ app.add_middleware(
 )
 
 
-class AlcoholType(Enum):
-    Beer = 1
-    Wine = 2
-    Whiskey = 3
-    Bourbon = 4
-    Tequila = 5
-    Seltzer = 6
-    Amaro = 7
-    Apertif = 8
-    Vermouth = 9
-    Brandy = 10
-    Cognac = 11
-    Gin = 12
-    Liqeur = 13
-    Cordial = 14
-    Schnapps = 15
-    ReadyMade = 16
-    Rum = 17
-    Scotch = 18
-    Vodka = 19
-
-
-class Item(BaseModel):
-    name: str
-    description: str
-    alcoholType: AlcoholType
-    b64ImgStr: Union[str, None] = Field(
-        default=None, title="The description of the item", max_length=300
-    )
-
-
 class Category(BaseModel):
+    id: Union[int, None] = Field(
+        default=None, title="The unique identifier of the category"
+    )
     name: str
     submittedBy: str
-
-    def as_dict(self):
-        return {"name": self.name, "submittedBy": self.submittedBy}
 
 
 class Rating(BaseModel):
-    rating: int
+    rating: float = Field(ge=0.0, le=5.0)
 
 
-class ItemResponse(BaseModel):
-    itemId: int
+class Item(BaseModel):
+    id: Union[int, None] = Field(
+        default=None, title="The unique identifier of the item"
+    )
     name: str
     description: str
-    alcoholType: AlcoholType
-    b64ImgStr: str
-    rating: float
-    numRatings: int
+    categoryId: int
+    b64ImgStr: Union[str, None] = Field(
+        default=None, description="Optional image of the Item"
+    )
+    rating: Union[float, None] = Field(
+        default=0,
+        description="Average rating of the item, nonzero after first rating",
+        ge=0,
+        le=5,
+    )
+    numRatings: Union[int, None] = Field(
+        default=0, description="Total number of ratings"
+    )
 
 
 class ItemsResponse(BaseModel):
-    items: list[ItemResponse] = []
-
-
-class CategoryResponse(BaseModel):
-    name: str
-    submittedBy: str
+    items: list[Item] = []
 
 
 class CategoriesResponse(BaseModel):
-    items: list[CategoryResponse] = []
+    items: list[Category] = []
 
 
 class SuccessMessage(BaseModel):
     successMessage: str
 
 
-categories_columns = ["name", "submittedBy"]
-items_columns = [
-    "name",
-    "description",
-    "alcohol_type",
-    "b64_img_str",
-    "avg_rating",
-    "num_ratings",
-]
-ratings_columns = ["item_id", "rating"]
-
-# categories_df = pd.DataFrame(columns=categories_columns)
-# items_df = pd.DataFrame(columns=items_columns)
-# ratings_df = pd.DataFrame(columns=ratings_columns)
-
-global categories
-global items
-global ratings
+global categories, items, ratings
 
 
 @app.on_event("startup")
 def init_data():
-    global categories
-    global items
-    global ratings
+    global categories, items, ratings
     categories = []
     items = []
     ratings = []
@@ -134,21 +90,6 @@ def init_data():
 async def getAllCategories():
     temp = CategoriesResponse(items=categories)
     return temp
-
-
-"""
-
-def checkitemExists(itemId):
-    if itemId not in items_df.index:
-        raise FastAPI.HTTPException(status_code=409, detail=f"Item does not exist")
-
-
-def checkRatingValidInputType(rating):
-    if type(rating) != int:
-        raise FastAPI.HTTPException(
-            status_code=409, detail=f"Non-numeric rating entered for item"
-        )
-"""
 
 
 def get_ip():
@@ -199,12 +140,12 @@ async def getAllItems():
     return ItemsResponse(items=items)
 
 
-"""
-@app.get("/item/{item_id}", response_model=ItemResponse)
-async def getItemById(itemId):
-    checkitemExists(itemId)
-    return items_df.loc[itemId]
-"""
+@app.get("/item/{itemId}", response_model=Item)
+async def getItemById(itemId: int):
+    for item in items:
+        if item.id == itemId:
+            return item
+    raise HTTPException(status_code=404, detail=f"Invalid itemId")
 
 
 @app.post("/item", response_model=SuccessMessage)
@@ -212,9 +153,13 @@ async def createNewItem(item: Item):
     if item.name.lower() in [i.name.lower() for i in items]:
         raise HTTPException(status_code=409, detail=f"Item already exists")
 
+    if item.categoryId not in [c.id for c in categories]:
+        raise HTTPException(status_code=422, detail=f"Invalid categoryId")
+
+    item.id = len(items)
     items.append(item)
 
-    return {"New item created successfully"}
+    return {"successMessage": "New item created successfully"}
 
 
 @app.post("/category", response_model=SuccessMessage)
@@ -222,28 +167,32 @@ async def createNewCategory(category: Category):
     if category.name.lower() in [c.name.lower() for c in categories]:
         raise HTTPException(status_code=409, detail=f"Category already exists")
 
+    category.id = len(categories)
     categories.append(category)
 
     return {"successMessage": "New category created successfully"}
 
 
-""" @app.post("/rating/{item_id}", response_model=SuccessMessage)
-async def createNewRating(itemId, rating: Rating):
+@app.post("/rating/{itemId}", response_model=SuccessMessage)
+async def createNewRating(itemId: int, rating: Rating):
     # Check for invalid data entries
-    checkitemExists(itemId)
-    checkRatingValidInputType(rating.rating)
+    # if itemId not in [item.id for item in items]:
+    #    raise HTTPException(status_code=404, detail=f"Invalid itemId")
 
-    # Add rating to stored df
-    ratings_df.append(rating)
+    for item in items:
+        if item.id == itemId:
+            newAverage = (item.numRatings * item.rating + rating.rating) / (
+                item.numRatings + 1
+            )
+            item.rating = newAverage
+            item.numRatings += 1
 
-    # Calculate avg
-    item_only_df = ratings_df.query("Courses == {}".format(itemId))
-    newAvg = item_only_df["rating"].mean()
+            # Add rating to stored df
+            ratings.append(rating)
 
-    # Set new avg
-    items_df.at[itemId, "avg_rating"] = newAvg
+            return {"successMessage": "Rating entered successfully!"}
 
-    return {"Rating entered successfully!"} """
+    raise HTTPException(status_code=404, detail=f"Invalid itemId")
 
 
 if __name__ == "__main__":
