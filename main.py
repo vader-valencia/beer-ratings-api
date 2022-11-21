@@ -1,7 +1,7 @@
 from cv2 import cornerEigenValsAndVecs
 from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from matplotlib.pyplot import ginput
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from enum import Enum
 import pandas as pd
 import qrcode
@@ -10,6 +10,7 @@ from PIL import Image
 import io
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+from typing import Union
 
 
 app = FastAPI()
@@ -51,14 +52,16 @@ class AlcoholType(Enum):
     Vodka = 19
 
 
-class NewItem(BaseModel):
+class Item(BaseModel):
     name: str
     description: str
     alcoholType: AlcoholType
-    b64ImgStr: str
+    b64ImgStr: Union[str, None] = Field(
+        default=None, title="The description of the item", max_length=300
+    )
 
 
-class NewCategory(BaseModel):
+class Category(BaseModel):
     name: str
     submittedBy: str
 
@@ -66,7 +69,7 @@ class NewCategory(BaseModel):
         return {"name": self.name, "submittedBy": self.submittedBy}
 
 
-class NewRating(BaseModel):
+class Rating(BaseModel):
     rating: int
 
 
@@ -108,10 +111,32 @@ items_columns = [
 ]
 ratings_columns = ["item_id", "rating"]
 
-categories_df = pd.DataFrame(columns=categories_columns)
-items_df = pd.DataFrame(columns=items_columns)
-ratings_df = pd.DataFrame(columns=ratings_columns)
+# categories_df = pd.DataFrame(columns=categories_columns)
+# items_df = pd.DataFrame(columns=items_columns)
+# ratings_df = pd.DataFrame(columns=ratings_columns)
 
+global categories
+global items
+global ratings
+
+
+@app.on_event("startup")
+def init_data():
+    global categories
+    global items
+    global ratings
+    categories = []
+    items = []
+    ratings = []
+
+
+@app.get("/all-categories", response_model=CategoriesResponse)
+async def getAllCategories():
+    temp = CategoriesResponse(items=categories)
+    return temp
+
+
+"""
 
 def checkitemExists(itemId):
     if itemId not in items_df.index:
@@ -123,6 +148,7 @@ def checkRatingValidInputType(rating):
         raise FastAPI.HTTPException(
             status_code=409, detail=f"Non-numeric rating entered for item"
         )
+"""
 
 
 def get_ip():
@@ -168,55 +194,41 @@ async def getQrCode(port, webPath="", fillColor="black", backgroundColor="white"
     return Response(content=image_to_byte_array(img), media_type="image/png")
 
 
-@app.get("/all-categories", response_model=CategoriesResponse)
-async def getAllCategories():
-    global categories_df
-    print("======================")
-    temp = CategoriesResponse(
-        items=[
-            CategoryResponse(**kwargs)
-            for kwargs in categories_df.to_dict(orient="records")
-        ]
-    )
-    print(temp)
-    return temp
-
-
 @app.get("/all-items", response_model=ItemsResponse)
 async def getAllItems():
-    return items_df
+    return ItemsResponse(items=items)
 
 
+"""
 @app.get("/item/{item_id}", response_model=ItemResponse)
 async def getItemById(itemId):
     checkitemExists(itemId)
     return items_df.loc[itemId]
+"""
 
 
-@app.post("/new-item/", response_model=SuccessMessage)
-async def createNewItem(item: NewItem):
-    if item.name.lower() in items_df["name"].lower():
-        raise FastAPI.HTTPException(status_code=409, detail=f"Item already exists")
+@app.post("/item", response_model=SuccessMessage)
+async def createNewItem(item: Item):
+    if item.name.lower() in [i.name.lower() for i in items]:
+        raise HTTPException(status_code=409, detail=f"Item already exists")
 
-    items_df.append(item)
+    items.append(item)
 
     return {"New item created successfully"}
 
 
-@app.post("/category/", response_model=SuccessMessage)
-async def createNewCategory(category: NewCategory):
-    global categories_df
-    if category.name.lower() in categories_df["name"].values.tolist():
+@app.post("/category", response_model=SuccessMessage)
+async def createNewCategory(category: Category):
+    if category.name.lower() in [c.name.lower() for c in categories]:
         raise HTTPException(status_code=409, detail=f"Category already exists")
 
-    newCategoryDf = pd.DataFrame.from_dict([category.as_dict()])
-    categories_df = categories_df.append(newCategoryDf)
+    categories.append(category)
 
     return {"successMessage": "New category created successfully"}
 
 
-@app.post("/rating/{item_id}", response_model=SuccessMessage)
-async def createNewRating(itemId, rating: NewRating):
+""" @app.post("/rating/{item_id}", response_model=SuccessMessage)
+async def createNewRating(itemId, rating: Rating):
     # Check for invalid data entries
     checkitemExists(itemId)
     checkRatingValidInputType(rating.rating)
@@ -231,7 +243,7 @@ async def createNewRating(itemId, rating: NewRating):
     # Set new avg
     items_df.at[itemId, "avg_rating"] = newAvg
 
-    return {"Rating entered successfully!"}
+    return {"Rating entered successfully!"} """
 
 
 if __name__ == "__main__":
