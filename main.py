@@ -48,18 +48,19 @@ class Item(BaseModel):
     )
     name: str
     description: str
+    submittedBy: str
     categoryId: int
     b64ImgStr: Union[str, None] = Field(
         default=None, description="Optional image of the Item"
     )
     rating: Union[float, None] = Field(
         default=0,
-        description="Average rating of the item, nonzero after first rating",
+        description="[Calculated Field] Average rating of the item, nonzero after first rating",
         ge=0,
         le=5,
     )
     numRatings: Union[int, None] = Field(
-        default=0, description="Total number of ratings"
+        default=0, description="[Calculated Field] Total number of ratings"
     )
 
 
@@ -86,7 +87,7 @@ def init_data():
     ratings = []
 
 
-@app.get("/all-categories", response_model=CategoriesResponse)
+@app.get("/categories", response_model=CategoriesResponse)
 async def getAllCategories():
     temp = CategoriesResponse(items=categories)
     return temp
@@ -134,13 +135,20 @@ async def getQrCode(port, webPath="", fillColor="black", backgroundColor="white"
 
     return Response(content=image_to_byte_array(img), media_type="image/png")
 
+@app.get("/{categoryId}/items", response_model=ItemsResponse)
+async def getItemsByCategoryId(categoryId: int):
+    filteredItems = []
+    for item in items:
+        if item.categoryId == categoryId:
+            filteredItems.append(item)
+    return ItemsResponse(items=filteredItems)
 
-@app.get("/all-items", response_model=ItemsResponse)
+@app.get("/items", response_model=ItemsResponse)
 async def getAllItems():
     return ItemsResponse(items=items)
 
 
-@app.get("/item/{itemId}", response_model=Item)
+@app.get("/items/{itemId}", response_model=Item)
 async def getItemById(itemId: int):
     for item in items:
         if item.id == itemId:
@@ -148,7 +156,7 @@ async def getItemById(itemId: int):
     raise HTTPException(status_code=404, detail=f"Invalid itemId")
 
 
-@app.post("/item", response_model=SuccessMessage)
+@app.post("/items", response_model=SuccessMessage)
 async def createNewItem(item: Item):
     if item.name.lower() in [i.name.lower() for i in items]:
         raise HTTPException(status_code=409, detail=f"Item already exists")
@@ -162,7 +170,7 @@ async def createNewItem(item: Item):
     return {"successMessage": "New item created successfully"}
 
 
-@app.post("/category", response_model=SuccessMessage)
+@app.post("/categories", response_model=SuccessMessage)
 async def createNewCategory(category: Category):
     if category.name.lower() in [c.name.lower() for c in categories]:
         raise HTTPException(status_code=409, detail=f"Category already exists")
@@ -173,7 +181,7 @@ async def createNewCategory(category: Category):
     return {"successMessage": "New category created successfully"}
 
 
-@app.post("/rating/{itemId}", response_model=SuccessMessage)
+@app.post("/ratings/{itemId}", response_model=SuccessMessage)
 async def createNewRating(itemId: int, rating: Rating):
     for item in items:
         if item.id == itemId:
