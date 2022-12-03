@@ -50,7 +50,7 @@ class Item(BaseModel):
     description: str
     submittedBy: str
     categoryId: int
-    b64ImgStr: Union[str, None] = Field(
+    image: Union[str, None] = Field(
         default=None, description="Optional image of the Item"
     )
     rating: Union[float, None] = Field(
