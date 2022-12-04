@@ -16,9 +16,10 @@ from typing import Union
 app = FastAPI()
 
 origins = [
-    "http://localhost",
-    "http://localhost:8000",
-    "http://localhost:3000",
+    "https://localhost",
+    "https://localhost:8000",
+    "https://localhost:3000",
+    "*"
 ]
 
 app.add_middleware(
@@ -123,7 +124,7 @@ def image_to_byte_array(image: Image) -> bytes:
     response_class=Response,
 )
 async def getQrCode(port, webPath="", fillColor="black", backgroundColor="white"):
-    address = "http://" + get_ip() + ":" + port + "/" + webPath
+    address = "https://" + get_ip() + ":" + port + "/" + webPath
     # Creating an instance of QRCode class
     qr = qrcode.QRCode(version=1, box_size=10, border=5)
 
@@ -135,6 +136,19 @@ async def getQrCode(port, webPath="", fillColor="black", backgroundColor="white"
 
     return Response(content=image_to_byte_array(img), media_type="image/png")
 
+
+@app.get("/{categoryName}/items", response_model=ItemsResponse)
+async def getItemsByCategoryName(categoryName: str):
+    if categoryName.lower() not in [c.name.lower() for c in categories]:
+        raise HTTPException(status_code=422, detail=f"Invalid category")
+
+    filteredItems = []
+    for item in items:
+        if item.name == categoryName.lower():
+            filteredItems.append(item)
+    return ItemsResponse(items=filteredItems)
+
+"""
 @app.get("/{categoryId}/items", response_model=ItemsResponse)
 async def getItemsByCategoryId(categoryId: int):
     filteredItems = []
@@ -142,11 +156,11 @@ async def getItemsByCategoryId(categoryId: int):
         if item.categoryId == categoryId:
             filteredItems.append(item)
     return ItemsResponse(items=filteredItems)
+"""
 
 @app.get("/items", response_model=ItemsResponse)
 async def getAllItems():
     return ItemsResponse(items=items)
-
 
 @app.get("/items/{itemId}", response_model=Item)
 async def getItemById(itemId: int):
@@ -200,4 +214,8 @@ async def createNewRating(itemId: int, rating: Rating):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, 
+    host="0.0.0.0", 
+    port=8000, 
+    ssl_certfile="./Certificates/cert.pem",
+    ssl_keyfile="./Certificates/key.pem")
