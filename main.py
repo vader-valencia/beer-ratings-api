@@ -15,12 +15,7 @@ from typing import Union
 
 app = FastAPI()
 
-origins = [
-    "https://localhost",
-    "https://localhost:8000",
-    "https://localhost:3000",
-    "*"
-]
+origins = ["https://localhost", "https://localhost:8000", "https://localhost:3000", "*"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -94,6 +89,14 @@ async def getAllCategories():
     return temp
 
 
+@app.get("/categories/{id}", response_model=Category)
+async def getCategoryById(id: int):
+    for category in categories:
+        if category.id == id:
+            return category
+    raise HTTPException(status_code=404, detail=f"Invalid categoryId")
+
+
 def get_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.settimeout(0)
@@ -148,6 +151,7 @@ async def getItemsByCategoryName(categoryName: str):
             filteredItems.append(item)
     return ItemsResponse(items=filteredItems)
 
+
 """
 @app.get("/{categoryId}/items", response_model=ItemsResponse)
 async def getItemsByCategoryId(categoryId: int):
@@ -158,9 +162,11 @@ async def getItemsByCategoryId(categoryId: int):
     return ItemsResponse(items=filteredItems)
 """
 
+
 @app.get("/items", response_model=ItemsResponse)
 async def getAllItems():
     return ItemsResponse(items=items)
+
 
 @app.get("/items/{itemId}", response_model=Item)
 async def getItemById(itemId: int):
@@ -214,8 +220,10 @@ async def createNewRating(itemId: int, rating: Rating):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, 
-    host="0.0.0.0", 
-    port=8000, 
-    ssl_certfile="./Certificates/cert.pem",
-    ssl_keyfile="./Certificates/key.pem")
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8000,
+        ssl_certfile="C:/Users/j22va/Desktop/Certificates/cert.pem ",
+        ssl_keyfile="C:/Users/j22va/Desktop/Certificates/key.pem",
+    )
