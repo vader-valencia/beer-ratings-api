@@ -72,31 +72,6 @@ class SuccessMessage(BaseModel):
     successMessage: str
 
 
-global categories, items, ratings
-
-
-@app.on_event("startup")
-def init_data():
-    global categories, items, ratings
-    categories = []
-    items = []
-    ratings = []
-
-
-@app.get("/categories", response_model=CategoriesResponse)
-async def getAllCategories():
-    temp = CategoriesResponse(items=categories)
-    return temp
-
-
-@app.get("/categories/{id}", response_model=Category)
-async def getCategoryById(id: int):
-    for category in categories:
-        if category.id == id:
-            return category
-    raise HTTPException(status_code=404, detail=f"Invalid categoryId")
-
-
 def get_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.settimeout(0)
@@ -140,54 +115,15 @@ async def getQrCode(port, webPath="", fillColor="black", backgroundColor="white"
     return Response(content=image_to_byte_array(img), media_type="image/png")
 
 
-@app.get("/{categoryName}/items", response_model=ItemsResponse)
-async def getItemsByCategoryName(categoryName: str):
-    if categoryName.lower() not in [c.name.lower() for c in categories]:
-        raise HTTPException(status_code=422, detail=f"Invalid category")
-
-    filteredItems = []
-    for item in items:
-        if item.name == categoryName.lower():
-            filteredItems.append(item)
-    return ItemsResponse(items=filteredItems)
+global categories, items, ratings
 
 
-"""
-@app.get("/{categoryId}/items", response_model=ItemsResponse)
-async def getItemsByCategoryId(categoryId: int):
-    filteredItems = []
-    for item in items:
-        if item.categoryId == categoryId:
-            filteredItems.append(item)
-    return ItemsResponse(items=filteredItems)
-"""
-
-
-@app.get("/items", response_model=ItemsResponse)
-async def getAllItems():
-    return ItemsResponse(items=items)
-
-
-@app.get("/items/{itemId}", response_model=Item)
-async def getItemById(itemId: int):
-    for item in items:
-        if item.id == itemId:
-            return item
-    raise HTTPException(status_code=404, detail=f"Invalid itemId")
-
-
-@app.post("/items", response_model=SuccessMessage)
-async def createNewItem(item: Item):
-    if item.name.lower() in [i.name.lower() for i in items]:
-        raise HTTPException(status_code=409, detail=f"Item already exists")
-
-    if item.categoryId not in [c.id for c in categories]:
-        raise HTTPException(status_code=422, detail=f"Invalid categoryId")
-
-    item.id = len(items)
-    items.append(item)
-
-    return {"successMessage": "New item created successfully"}
+@app.on_event("startup")
+def init_data():
+    global categories, items, ratings
+    categories = []
+    items = []
+    ratings = []
 
 
 @app.post("/categories", response_model=SuccessMessage)
@@ -201,10 +137,75 @@ async def createNewCategory(category: Category):
     return {"successMessage": "New category created successfully"}
 
 
-@app.post("/ratings/{itemId}", response_model=SuccessMessage)
-async def createNewRating(itemId: int, rating: Rating):
+@app.get("/categories", response_model=CategoriesResponse)
+async def getAllCategories():
+    temp = CategoriesResponse(items=categories)
+    return temp
+
+
+@app.get("/categories/{categoryId}", response_model=Category)
+async def getCategoryById(categoryId: int):
+    for category in categories:
+        if category.id == categoryId:
+            return category
+    raise HTTPException(status_code=404, detail=f"Invalid categoryId")
+
+
+@app.get("/categories/{categoryId}/items", response_model=ItemsResponse)
+async def getItemsByCategoryId(categoryId: int):
+    filteredItems = []
+    for item in items:
+        if item.categoryId == categoryId:
+            filteredItems.append(item)
+    return ItemsResponse(items=filteredItems)
+
+
+@app.post("categories/{categoryId}/items", response_model=SuccessMessage)
+async def createNewItem(categoryId: int, item: Item):
+    if categoryId not in [c.id for c in categories]:
+        raise HTTPException(status_code=422, detail=f"Invalid categoryId")
+
+    if item.categoryId != categoryId:
+        raise HTTPException(status_code=422, detail=f"categoryId mismatch")
+
+    if item.name.lower() in [i.name.lower() for i in items]:
+        raise HTTPException(status_code=409, detail=f"Item already exists")
+
+    item.id = len(items)
+    items.append(item)
+
+    return {"successMessage": "New item created successfully"}
+
+
+@app.get("/items", response_model=ItemsResponse)
+async def getAllItems():
+    return ItemsResponse(items=items)
+
+
+@app.get("categories/{categoryId}/items/{itemId}", response_model=Item)
+async def getItemById(categoryId: int, itemId: int):
+    if categoryId not in [c.id for c in categories]:
+        raise HTTPException(status_code=422, detail=f"Invalid categoryId")
+
     for item in items:
         if item.id == itemId:
+            return item
+    raise HTTPException(status_code=404, detail=f"Invalid itemId")
+
+
+@app.post(
+    "categories/{categoryId}/items/{itemId}/ratings", response_model=SuccessMessage
+)
+async def createNewRating(categoryId: int, itemId: int, rating: Rating):
+    if categoryId not in [c.id for c in categories]:
+        raise HTTPException(status_code=422, detail=f"Invalid categoryId")
+
+    for item in items:
+        if item.id == itemId:
+
+            if categoryId != item.categoryId:
+                raise HTTPException(status_code=422, detail=f"categoryId mismatch")
+
             newAverage = (item.numRatings * item.rating + rating.rating) / (
                 item.numRatings + 1
             )
